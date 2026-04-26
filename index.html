@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<meta name="apple-mobile-web-app-title" content="Distracted"/>
+<meta name="theme-color" content="#f7f6f3"/>
+<link rel="manifest" href="manifest.json"/>
+<link rel="apple-touch-icon" href="icons/icon-192.png"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<title>Distraction Tracker</title>
+<style>
+:root{
+  --bg:#f7f6f3; --surface:#fff; --surface2:#f0efe9; --surface3:#e8e7e0;
+  --border:rgba(0,0,0,.08); --border2:rgba(0,0,0,.14);
+  --accent:#4355f5; --accent-lt:#ebedff; --accent-md:rgba(67,85,245,.18);
+  --text:#1a1a24; --text2:#555566; --text3:#9999aa;
+  --danger:#e84040; --danger-lt:#ffeaea;
+  --green:#22b45d; --green-lt:#e6f9ee;
+  --tab-h:62px; --safe-t:env(safe-area-inset-top,0px); --safe-b:env(safe-area-inset-bottom,0px);
+  --fh:'Syne',sans-serif; --fb:'DM Sans',sans-serif; --r:14px; --r-sm:10px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--fb);font-size:15px;overflow:hidden;-webkit-font-smoothing:antialiased;}
+#app{display:flex;flex-direction:column;height:100vh;height:100dvh;}
+.page{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;display:none;padding-bottom:calc(var(--tab-h) + var(--safe-b) + 8px);}
+.page.active{display:block;}
+
+/* header */
+.hdr{padding:calc(var(--safe-t) + 12px) 16px 10px;background:rgba(247,246,243,.95);position:sticky;top:0;z-index:10;border-bottom:1px solid var(--border);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);}
+.hdr-row{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.hdr h1{font-family:var(--fh);font-size:20px;font-weight:700;letter-spacing:-.2px;}
+.hdr-sub{font-size:11px;color:var(--text3);margin-top:1px;}
+.hdr-right{display:flex;align-items:center;gap:6px;}
+.hdr-pill{background:var(--accent-lt);color:var(--accent);font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;white-space:nowrap;}
+.icon-btn{background:var(--surface2);border:1px solid var(--border2);border-radius:8px;width:32px;height:32px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text2);flex-shrink:0;transition:background .15s;}
+.icon-btn:active{background:var(--surface3);}
+
+/* sync indicator in header */
+.sync-dot{width:8px;height:8px;border-radius:50%;background:var(--text3);display:inline-block;transition:background .3s;}
+.sync-dot.ok{background:var(--green);}
+.sync-dot.err{background:var(--danger);}
+.sync-dot.syncing{background:var(--accent);animation:pulse .8s ease infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* tabbar */
+.tabbar{position:fixed;bottom:0;left:0;right:0;height:calc(var(--tab-h) + var(--safe-b));padding-bottom:var(--safe-b);background:rgba(247,246,243,.95);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid var(--border);display:flex;align-items:stretch;z-index:100;}
+.tab-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:none;border:none;color:var(--text3);cursor:pointer;transition:color .15s;padding-top:6px;}
+.tab-btn.active{color:var(--accent);}
+.tab-icon{font-size:20px;line-height:1;}
+.tab-lbl{font-size:10px;font-weight:600;letter-spacing:.3px;font-family:var(--fh);}
+
+/* layout helpers */
+.section{padding:14px 14px 0;}
+.sec-head{padding:14px 14px 6px;font-family:var(--fh);font-size:11px;font-weight:700;letter-spacing:.6px;color:var(--text3);text-transform:uppercase;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;}
+.sep{height:1px;background:var(--border);margin:8px 14px;}
+
+/* metric cards */
+.metric-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.metric-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:11px 10px;}
+.m-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;font-weight:600;}
+.m-val{font-family:var(--fh);font-size:18px;font-weight:700;color:var(--text);line-height:1;}
+.m-sub{font-size:10px;color:var(--text3);margin-top:3px;}
+
+/* form */
+.form-wrap{padding:14px;}
+.form-title{font-family:var(--fh);font-size:11px;font-weight:700;letter-spacing:.6px;color:var(--text3);text-transform:uppercase;margin-bottom:11px;}
+.field-lbl{font-size:12px;color:var(--text2);margin-bottom:5px;display:block;font-weight:500;}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;}
+.field-full{margin-bottom:8px;}
+
+input[type=number],input[type=text],select,input[type=password]{width:100%;background:var(--surface2);border:1.5px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-family:var(--fb);font-size:15px;padding:11px 12px;outline:none;transition:border-color .15s;-webkit-appearance:none;appearance:none;}
+input:focus,select:focus{border-color:var(--accent);background:var(--surface);}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='7' viewBox='0 0 12 7'%3E%3Cpath d='M1 1l5 4.5L11 1' stroke='%239999aa' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px;}
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;}
+::placeholder{color:var(--text3);}
+
+.btn-primary{width:100%;background:var(--accent);color:#fff;border:none;border-radius:var(--r-sm);font-family:var(--fh);font-size:14px;font-weight:700;padding:13px;cursor:pointer;letter-spacing:.3px;transition:opacity .15s,transform .1s;margin-top:2px;}
+.btn-primary:active{opacity:.85;transform:scale(.99);}
+.btn-secondary{width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border2);border-radius:var(--r-sm);font-family:var(--fh);font-size:13px;font-weight:700;padding:12px;cursor:pointer;transition:background .15s;}
+.btn-secondary:active{background:var(--surface3);}
+.btn-danger{width:100%;background:var(--danger-lt);color:var(--danger);border:1px solid rgba(232,64,64,.2);border-radius:var(--r-sm);font-family:var(--fh);font-size:13px;font-weight:700;padding:12px;cursor:pointer;}
+
+/* log items */
+.log-item{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border-bottom:1px solid var(--border);gap:10px;animation:fadeIn .18s ease;}
+.log-item:last-child{border-bottom:none;}
+.log-left{flex:1;min-width:0;}
+.log-meta{display:flex;align-items:center;gap:7px;margin-bottom:3px;flex-wrap:wrap;}
+.log-tag{font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:var(--accent-lt);color:var(--accent);}
+.log-ts{font-size:11px;color:var(--text3);}
+.log-note{font-size:13px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.log-right{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+.log-dur{font-family:var(--fh);font-size:15px;font-weight:700;color:var(--text);}
+.del-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;transition:background .15s,color .15s;}
+.del-btn:active{background:var(--danger-lt);color:var(--danger);}
+.empty{text-align:center;padding:32px 16px;color:var(--text3);font-size:14px;}
+.empty-icon{font-size:32px;margin-bottom:8px;}
+
+/* bars */
+.bar-section{padding:0 14px 4px;}
+.bar-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.bar-lbl{font-size:12px;color:var(--text2);width:30px;text-align:right;flex-shrink:0;font-weight:500;}
+.bar-lbl-w{font-size:12px;color:var(--text2);width:76px;text-align:right;flex-shrink:0;font-weight:500;}
+.bar-wrap{flex:1;height:20px;background:var(--surface2);border-radius:6px;overflow:hidden;}
+.bar-fill{height:100%;border-radius:6px;transition:width .4s cubic-bezier(.4,0,.2,1);}
+.bar-val{font-size:12px;color:var(--text2);width:38px;font-family:var(--fh);font-weight:600;}
+
+/* calendar */
+.cal-nav-row{display:flex;align-items:center;justify-content:space-between;padding:10px 14px 6px;}
+.cal-nav-btn{width:34px;height:34px;background:var(--surface);border:1px solid var(--border2);border-radius:10px;color:var(--text2);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s;}
+.cal-nav-btn:active{background:var(--surface2);}
+.cal-m-title{font-family:var(--fh);font-size:17px;font-weight:700;}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;padding:0 8px;}
+.cal-dow{text-align:center;font-size:10px;color:var(--text3);padding:3px 0 5px;font-weight:600;letter-spacing:.3px;}
+.cal-cell{border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:5px 2px 4px;min-height:50px;cursor:default;position:relative;transition:background .12s;}
+.cal-cell.has-data{cursor:pointer;}
+.cal-cell.has-data:active{background:var(--surface2);}
+.cal-cell.selected{background:var(--accent-lt);outline:1.5px solid rgba(67,85,245,.4);}
+.cal-num{font-size:12px;font-weight:500;color:var(--text2);line-height:1;margin-bottom:3px;}
+.cal-cell.other-month .cal-num{color:var(--text3);opacity:.4;}
+.cal-cell.is-today .cal-num{background:var(--accent);color:#fff;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;margin-bottom:2px;}
+.cal-heat{width:75%;height:3px;border-radius:2px;margin-bottom:2px;}
+.cal-mmin{font-size:9px;font-weight:600;color:var(--text2);line-height:1;}
+.day-detail{margin:8px 12px;background:var(--surface);border:1px solid var(--border2);border-radius:var(--r);overflow:hidden;animation:slideDown .18s ease;}
+.detail-hdr{display:flex;justify-content:space-between;align-items:center;padding:11px 14px;border-bottom:1px solid var(--border);}
+.detail-title{font-family:var(--fh);font-size:14px;font-weight:700;}
+.detail-total{font-family:var(--fh);font-size:14px;font-weight:700;color:var(--accent);}
+
+/* modal */
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;display:flex;align-items:flex-end;}
+.modal{background:var(--surface);border-radius:20px 20px 0 0;padding:20px 18px;padding-bottom:calc(20px + var(--safe-b));width:100%;max-height:88dvh;overflow-y:auto;animation:slideUp .22s ease;position:relative;}
+.modal-title{font-family:var(--fh);font-size:17px;font-weight:700;margin-bottom:4px;}
+.modal-sub{font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.5;}
+.modal-close{position:absolute;top:16px;right:16px;background:var(--surface2);border:none;border-radius:50%;width:28px;height:28px;font-size:14px;cursor:pointer;color:var(--text2);display:flex;align-items:center;justify-content:center;}
+.info-box{background:var(--surface2);border-radius:var(--r-sm);padding:12px;margin-bottom:12px;font-size:13px;color:var(--text2);line-height:1.6;}
+.info-box strong{color:var(--text);}
+.info-box a{color:var(--accent);text-decoration:none;font-weight:500;}
+.info-box ol{padding-left:18px;margin-top:4px;}
+.info-box ol li{margin-bottom:3px;}
+.status-row{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--surface2);border-radius:var(--r-sm);margin-bottom:12px;font-size:13px;}
+.status-label{flex:1;color:var(--text2);}
+.status-badge{font-size:12px;font-weight:600;padding:3px 9px;border-radius:20px;}
+.status-badge.connected{background:var(--green-lt);color:var(--green);}
+.status-badge.disconnected{background:var(--surface3);color:var(--text3);}
+.btn-row2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;}
+
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideDown{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+::-webkit-scrollbar{width:0;}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- LOG -->
+<div class="page active" id="page-log">
+  <div class="hdr">
+    <div class="hdr-row">
+      <div><h1>Distracted</h1><div class="hdr-sub" id="hdr-date"></div></div>
+      <div class="hdr-right">
+        <div class="hdr-pill" id="hdr-pill">0m today</div>
+        <span id="sync-dot" class="sync-dot" title="Dropbox 연동 상태"></span>
+        <button class="icon-btn" onclick="openSyncModal()" title="Dropbox 동기화">☁️</button>
+      </div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="metric-grid">
+      <div class="metric-card"><div class="m-label">Today</div><div class="m-val" id="m-today">0m</div><div class="m-sub" id="m-today-cnt">0 entries</div></div>
+      <div class="metric-card"><div class="m-label">This week</div><div class="m-val" id="m-week">0m</div><div class="m-sub" id="m-week-avg">—/day</div></div>
+      <div class="metric-card"><div class="m-label">Longest</div><div class="m-val" id="m-longest">0m</div><div class="m-sub">single</div></div>
+    </div>
+  </div>
+  <div class="section" style="padding-top:12px;">
+    <div class="card">
+      <div class="form-wrap">
+        <div class="form-title">New entry</div>
+        <div class="field-row">
+          <div><label class="field-lbl">Duration (min)</label><input type="number" id="inp-dur" inputmode="numeric" min="1" max="480" placeholder="15"/></div>
+          <div><label class="field-lbl">Category</label>
+            <select id="inp-cat">
+              <option value="social media">Social media</option>
+              <option value="phone">Phone</option>
+              <option value="conversation">Conversation</option>
+              <option value="browsing">Browsing</option>
+              <option value="daydreaming">Daydreaming</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
+        <div class="field-full"><label class="field-lbl">Note (optional)</label><input type="text" id="inp-note" placeholder="무엇에 빠져들었나요?"/></div>
+        <button class="btn-primary" onclick="addEntry()">+ Add distraction</button>
+      </div>
+    </div>
+  </div>
+  <div class="sec-head">Today's log</div>
+  <div class="card" style="margin:0 14px;" id="today-list"></div>
+</div>
+
+<!-- WEEK -->
+<div class="page" id="page-week">
+  <div class="hdr"><div class="hdr-row"><div><h1>This week</h1><div class="hdr-sub">7-day overview</div></div></div></div>
+  <div class="sec-head">Daily</div>
+  <div class="bar-section" id="week-bars"></div>
+  <div class="sep"></div>
+  <div class="sec-head">By category (all time)</div>
+  <div class="bar-section" id="cat-bars"></div>
+</div>
+
+<!-- MONTH -->
+<div class="page" id="page-month">
+  <div class="hdr"><div class="hdr-row"><div><h1>Calendar</h1><div class="hdr-sub" id="cal-hdr-sub"></div></div></div></div>
+  <div class="section" style="padding-bottom:8px;">
+    <div class="metric-grid">
+      <div class="metric-card"><div class="m-label">Total</div><div class="m-val" id="ms-total">0m</div><div class="m-sub" id="ms-days">0 days</div></div>
+      <div class="metric-card"><div class="m-label">Daily avg</div><div class="m-val" id="ms-avg">—</div><div class="m-sub">active days</div></div>
+      <div class="metric-card"><div class="m-label">Worst day</div><div class="m-val" id="ms-worst">—</div><div class="m-sub" id="ms-worst-d"></div></div>
+    </div>
+  </div>
+  <div class="cal-nav-row">
+    <button class="cal-nav-btn" onclick="moveMonth(-1)">&#8592;</button>
+    <span class="cal-m-title" id="cal-title"></span>
+    <button class="cal-nav-btn" onclick="moveMonth(1)">&#8594;</button>
+  </div>
+  <div class="cal-grid" id="cal-dow"></div>
+  <div class="cal-grid" id="cal-body" style="margin-top:2px;"></div>
+  <div id="cal-detail"></div>
+</div>
+
+</div><!-- /app -->
+
+<nav class="tabbar">
+  <button class="tab-btn active" onclick="setPage('log',this)"><span class="tab-icon">✍️</span><span class="tab-lbl">LOG</span></button>
+  <button class="tab-btn" onclick="setPage('week',this)"><span class="tab-icon">📊</span><span class="tab-lbl">WEEK</span></button>
+  <button class="tab-btn" onclick="setPage('month',this)"><span class="tab-icon">🗓</span><span class="tab-lbl">MONTH</span></button>
+</nav>
+
+<div id="modal-root"></div>
+
+<script>
+// ── Data ──
+const LS='distraction_v3';
+const DBX_KEY='dbx_app_key', DBX_TOKEN='dbx_access_token', DBX_REFRESH='dbx_refresh_token', DBX_VERIFIER='dbx_verifier';
+const DBX_FILE='/distraction-tracker.json';
+let entries=JSON.parse(localStorage.getItem(LS)||'[]');
+let calYear,calMonth,selDate=null;
+const NOW=new Date();calYear=NOW.getFullYear();calMonth=NOW.getMonth();
+
+function save(){localStorage.setItem(LS,JSON.stringify(entries));}
+function todayStr(){return new Date().toISOString().slice(0,10);}
+function fmtMin(m){if(!m)return'0m';if(m<60)return m+'m';const h=Math.floor(m/60),r=m%60;return r?h+'h '+r+'m':h+'h';}
+function fmtShort(m){if(!m)return'';if(m<60)return m+'m';return Math.floor(m/60)+'h'+(m%60?(m%60)+'m':'');}
+
+// ── Navigation ──
+function setPage(id,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  if(id==='week')renderWeek();
+  if(id==='month')renderCalendar();
+}
+
+// ── Entry CRUD ──
+async function addEntry(){
+  const dur=parseInt(document.getElementById('inp-dur').value);
+  if(!dur||dur<1){document.getElementById('inp-dur').focus();return;}
+  const cat=document.getElementById('inp-cat').value;
+  const note=document.getElementById('inp-note').value.trim();
+  const t=new Date();
+  entries.push({id:t.getTime(),date:todayStr(),ts:t.toTimeString().slice(0,5),duration:dur,category:cat,note});
+  document.getElementById('inp-dur').value='';
+  document.getElementById('inp-note').value='';
+  save();renderAll();
+  if(navigator.vibrate)navigator.vibrate(30);
+  await dbxSave();
+}
+
+async function deleteEntry(id){
+  entries=entries.filter(e=>e.id!==id);
+  save();renderAll();
+  await dbxSave();
+}
+
+// ── Render ──
+function renderAll(){renderHeader();renderTodayList();renderWeek();renderCalendar();}
+
+function renderHeader(){
+  const t=todayStr();
+  const te=entries.filter(e=>e.date===t);
+  const tm=te.reduce((s,e)=>s+e.duration,0);
+  const wAgo=new Date();wAgo.setDate(wAgo.getDate()-6);
+  const we=entries.filter(e=>new Date(e.date)>=wAgo);
+  const wm=we.reduce((s,e)=>s+e.duration,0);
+  const lng=entries.length?Math.max(...entries.map(e=>e.duration)):0;
+  document.getElementById('hdr-date').textContent=NOW.toLocaleDateString('ko-KR',{month:'long',day:'numeric',weekday:'short'});
+  document.getElementById('hdr-pill').textContent=fmtMin(tm)+' today';
+  document.getElementById('m-today').textContent=fmtMin(tm);
+  document.getElementById('m-today-cnt').textContent=te.length+' entr'+(te.length===1?'y':'ies');
+  document.getElementById('m-week').textContent=fmtMin(wm);
+  document.getElementById('m-week-avg').textContent=fmtMin(Math.round(wm/7))+'/day';
+  document.getElementById('m-longest').textContent=fmtMin(lng);
+}
+
+function renderTodayList(){
+  const t=todayStr();
+  const list=entries.filter(e=>e.date===t).sort((a,b)=>b.id-a.id);
+  const el=document.getElementById('today-list');
+  if(!list.length){el.innerHTML='<div class="empty"><div class="empty-icon">🎯</div>오늘 기록이 없어요</div>';return;}
+  el.innerHTML=list.map(e=>`
+    <div class="log-item">
+      <div class="log-left">
+        <div class="log-meta"><span class="log-tag">${e.category}</span><span class="log-ts">${e.ts}</span></div>
+        ${e.note?`<div class="log-note">${e.note}</div>`:''}
+      </div>
+      <div class="log-right">
+        <span class="log-dur">${fmtMin(e.duration)}</span>
+        <button class="del-btn" onclick="deleteEntry(${e.id})">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+function renderWeek(){
+  const days=[];
+  for(let i=6;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);days.push(d.toISOString().slice(0,10));}
+  const mins=days.map(d=>entries.filter(e=>e.date===d).reduce((s,e)=>s+e.duration,0));
+  const maxD=Math.max(...mins,1);
+  const dows=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const t=todayStr();
+  document.getElementById('week-bars').innerHTML=days.map((d,i)=>{
+    const dow=new Date(d+'T12:00:00').getDay(),isT=d===t;
+    return`<div class="bar-row">
+      <span class="bar-lbl" style="${isT?'color:var(--text);font-weight:700;':''}">${dows[dow]}</span>
+      <div class="bar-wrap"><div class="bar-fill" style="width:${Math.round(mins[i]/maxD*100)}%;background:${isT?'var(--accent)':'rgba(67,85,245,.3)'};"></div></div>
+      <span class="bar-val">${mins[i]?fmtMin(mins[i]):'—'}</span>
+    </div>`;
+  }).join('');
+  const cats={};entries.forEach(e=>{cats[e.category]=(cats[e.category]||0)+e.duration;});
+  const sorted=Object.entries(cats).sort((a,b)=>b[1]-a[1]);
+  const maxC=sorted.length?sorted[0][1]:1;
+  document.getElementById('cat-bars').innerHTML=sorted.length
+    ?sorted.map(([c,m])=>`<div class="bar-row"><span class="bar-lbl-w">${c}</span><div class="bar-wrap"><div class="bar-fill" style="width:${Math.round(m/maxC*100)}%;background:rgba(67,85,245,.35);"></div></div><span class="bar-val">${fmtMin(m)}</span></div>`).join('')
+    :'<div class="empty"><div class="empty-icon">📊</div>데이터 없음</div>';
+}
+
+function getDayMin(ds){return entries.filter(e=>e.date===ds).reduce((s,e)=>s+e.duration,0);}
+function heatCol(min,maxMin){
+  if(!min)return null;const r=Math.min(min/Math.max(maxMin,1),1);
+  if(r<.25)return'rgba(67,85,245,.22)';if(r<.5)return'rgba(67,85,245,.42)';if(r<.75)return'rgba(67,85,245,.62)';return'var(--accent)';
+}
+
+function moveMonth(d){calMonth+=d;if(calMonth>11){calMonth=0;calYear++;}if(calMonth<0){calMonth=11;calYear--;}selDate=null;renderCalendar();}
+
+function renderCalendar(){
+  const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  document.getElementById('cal-title').textContent=MONTHS[calMonth]+' '+calYear;
+  document.getElementById('cal-hdr-sub').textContent=MONTHS[calMonth]+' '+calYear;
+  const first=new Date(calYear,calMonth,1).getDay(),dimM=new Date(calYear,calMonth+1,0).getDate(),dimP=new Date(calYear,calMonth,0).getDate(),t=todayStr();
+  const mMins=[];
+  for(let d=1;d<=dimM;d++){const ds=calYear+'-'+String(calMonth+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');mMins.push(getDayMin(ds));}
+  const maxMin=Math.max(...mMins,1),total=mMins.reduce((a,b)=>a+b,0),active=mMins.filter(m=>m>0).length,avg=active?Math.round(total/active):0;
+  const worstIdx=mMins.indexOf(Math.max(...mMins)),worstMin=mMins[worstIdx];
+  document.getElementById('ms-total').textContent=fmtMin(total);
+  document.getElementById('ms-days').textContent=active+' days';
+  document.getElementById('ms-avg').textContent=fmtMin(avg);
+  document.getElementById('ms-worst').textContent=worstMin?fmtMin(worstMin):'—';
+  document.getElementById('ms-worst-d').textContent=worstMin?(calMonth+1)+'/'+(worstIdx+1):'';
+  document.getElementById('cal-dow').innerHTML=['S','M','T','W','T','F','S'].map(d=>`<div class="cal-dow">${d}</div>`).join('');
+  let cells='';
+  for(let i=0;i<first;i++){const d=dimP-first+1+i;cells+=`<div class="cal-cell other-month"><span class="cal-num">${d}</span></div>`;}
+  for(let d=1;d<=dimM;d++){
+    const ds=calYear+'-'+String(calMonth+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    const min=getDayMin(ds),isT=ds===t,isSel=ds===selDate,col=heatCol(min,maxMin);
+    const onclick=min>0||isT?`onclick="selectDate('${ds}')"` :'';
+    cells+=`<div class="cal-cell${min>0?' has-data':''}${isT?' is-today':''}${isSel?' selected':''}" ${onclick}>
+      <span class="cal-num">${d}</span>
+      <div class="cal-heat" style="background:${col||'transparent'};"></div>
+      ${min?`<span class="cal-mmin">${fmtShort(min)}</span>`:''}
+    </div>`;
+  }
+  const rem=(first+dimM)%7;for(let i=1;i<=(rem?7-rem:0);i++){cells+=`<div class="cal-cell other-month"><span class="cal-num">${i}</span></div>`;}
+  document.getElementById('cal-body').innerHTML=cells;
+  renderDayDetail();
+}
+
+function selectDate(ds){selDate=selDate===ds?null:ds;renderCalendar();}
+
+function renderDayDetail(){
+  const el=document.getElementById('cal-detail');
+  if(!selDate){el.innerHTML='';return;}
+  const list=entries.filter(e=>e.date===selDate).sort((a,b)=>a.id-b.id);
+  const total=list.reduce((s,e)=>s+e.duration,0);
+  const [,m,d]=selDate.split('-');
+  el.innerHTML=`<div class="day-detail">
+    <div class="detail-hdr"><span class="detail-title">${parseInt(m)}월 ${parseInt(d)}일</span><span class="detail-total">${fmtMin(total)}</span></div>
+    ${list.length?list.map(e=>`<div class="log-item">
+      <div class="log-left"><div class="log-meta"><span class="log-tag">${e.category}</span><span class="log-ts">${e.ts}</span></div>${e.note?`<div class="log-note">${e.note}</div>`:''}</div>
+      <div class="log-right"><span class="log-dur">${fmtMin(e.duration)}</span><button class="del-btn" onclick="entries=entries.filter(x=>x.id!==${e.id});save();renderAll();dbxSave();">✕</button></div>
+    </div>`).join(''):'<div class="empty" style="padding:20px;">기록 없음</div>'}
+  </div>`;
+}
+
+// ══════════════════════════════════
+// ── Dropbox PKCE OAuth ──
+// ══════════════════════════════════
+
+function setSyncDot(state){
+  const dot=document.getElementById('sync-dot');
+  dot.className='sync-dot'+(state?' '+state:'');
+  dot.title={ok:'Dropbox 연동됨',err:'Dropbox 오류',syncing:'동기화 중...','':`Dropbox ${isDbxConnected()?'연동됨':'미연결'}`}[state]||'';
+}
+function isDbxConnected(){return !!localStorage.getItem(DBX_TOKEN);}
+
+// PKCE helpers
+function b64url(buf){return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');}
+function genVerifier(){const a=new Uint8Array(32);crypto.getRandomValues(a);return b64url(a);}
+async function genChallenge(v){const d=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v));return b64url(d);}
+
+function getRedirectUri(){
+  const u=location.href.split('?')[0].split('#')[0];
+  // remove trailing slash for consistency
+  return u.endsWith('/')?u.slice(0,-1):u;
+}
+
+async function dbxConnect(){
+  const appKey=localStorage.getItem(DBX_KEY);
+  if(!appKey){alert('App Key를 먼저 입력해주세요.');return;}
+  const verifier=genVerifier();
+  const challenge=await genChallenge(verifier);
+  localStorage.setItem(DBX_VERIFIER,verifier);
+  const params=new URLSearchParams({
+    client_id:appKey,response_type:'code',
+    code_challenge:challenge,code_challenge_method:'S256',
+    redirect_uri:getRedirectUri(),token_access_type:'offline'
+  });
+  location.href='https://www.dropbox.com/oauth2/authorize?'+params;
+}
+
+async function handleOAuthCallback(){
+  const params=new URLSearchParams(location.search);
+  const code=params.get('code');
+  if(!code)return;
+  history.replaceState({},'',location.pathname);
+  const appKey=localStorage.getItem(DBX_KEY);
+  const verifier=localStorage.getItem(DBX_VERIFIER);
+  if(!appKey||!verifier){setSyncDot('err');return;}
+  setSyncDot('syncing');
+  try{
+    const r=await fetch('https://api.dropboxapi.com/oauth2/token',{
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:new URLSearchParams({code,grant_type:'authorization_code',code_verifier:verifier,client_id:appKey,redirect_uri:getRedirectUri()})
+    });
+    const data=await r.json();
+    if(data.access_token){
+      localStorage.setItem(DBX_TOKEN,data.access_token);
+      if(data.refresh_token)localStorage.setItem(DBX_REFRESH,data.refresh_token);
+      localStorage.removeItem(DBX_VERIFIER);
+      await dbxLoad();
+      setSyncDot('ok');
+    }else{setSyncDot('err');alert('Dropbox 연결 실패: '+JSON.stringify(data));}
+  }catch(e){setSyncDot('err');}
+}
+
+async function dbxRefreshToken(){
+  const appKey=localStorage.getItem(DBX_KEY);
+  const refresh=localStorage.getItem(DBX_REFRESH);
+  if(!appKey||!refresh)return false;
+  try{
+    const r=await fetch('https://api.dropboxapi.com/oauth2/token',{
+      method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:new URLSearchParams({grant_type:'refresh_token',refresh_token:refresh,client_id:appKey})
+    });
+    const data=await r.json();
+    if(data.access_token){localStorage.setItem(DBX_TOKEN,data.access_token);return true;}
+  }catch(e){}
+  return false;
+}
+
+async function dbxRequest(url,opts,retry=true){
+  const token=localStorage.getItem(DBX_TOKEN);
+  if(!token)return null;
+  const r=await fetch(url,{...opts,headers:{...opts.headers,'Authorization':'Bearer '+token}});
+  if(r.status===401&&retry){
+    const ok=await dbxRefreshToken();
+    if(ok)return dbxRequest(url,opts,false);
+    localStorage.removeItem(DBX_TOKEN);setSyncDot('err');return null;
+  }
+  return r;
+}
+
+async function dbxSave(){
+  if(!isDbxConnected())return;
+  setSyncDot('syncing');
+  try{
+    const r=await dbxRequest('https://content.dropboxapi.com/2/files/upload',{
+      method:'POST',
+      headers:{'Dropbox-API-Arg':JSON.stringify({path:DBX_FILE,mode:'overwrite',mute:true}),'Content-Type':'application/octet-stream'},
+      body:JSON.stringify(entries)
+    });
+    setSyncDot(r&&r.ok?'ok':'err');
+  }catch(e){setSyncDot('err');}
+}
+
+async function dbxLoad(){
+  if(!isDbxConnected())return;
+  setSyncDot('syncing');
+  try{
+    const r=await dbxRequest('https://content.dropboxapi.com/2/files/download',{
+      method:'POST',
+      headers:{'Dropbox-API-Arg':JSON.stringify({path:DBX_FILE})}
+    });
+    if(r&&r.ok){
+      const remote=await r.json();
+      if(Array.isArray(remote)){
+        // merge: keep entries from both, deduplicate by id
+        const idSet=new Set(remote.map(e=>e.id));
+        const merged=[...remote,...entries.filter(e=>!idSet.has(e.id))];
+        merged.sort((a,b)=>a.id-b.id);
+        entries=merged;save();renderAll();
+      }
+      setSyncDot('ok');
+    }else if(r&&r.status===409){
+      // file doesn't exist yet — save ours
+      await dbxSave();
+    }else{setSyncDot('err');}
+  }catch(e){setSyncDot('err');}
+}
+
+function dbxDisconnect(){
+  localStorage.removeItem(DBX_TOKEN);localStorage.removeItem(DBX_REFRESH);
+  setSyncDot('');closeModal();
+}
+
+// ── Sync Modal ──
+function openSyncModal(){
+  const connected=isDbxConnected();
+  const appKey=localStorage.getItem(DBX_KEY)||'';
+  document.getElementById('modal-root').innerHTML=`
+    <div class="modal-backdrop" id="modal-bd" onclick="if(event.target===this)closeModal()">
+      <div class="modal">
+        <button class="modal-close" onclick="closeModal()">✕</button>
+        <div class="modal-title">☁️ Dropbox 연동</div>
+        <div class="modal-sub">한 번 설정하면 모든 기기에서 자동으로 데이터가 동기화돼요.</div>
+
+        <div class="status-row">
+          <span class="status-label">연결 상태</span>
+          <span class="status-badge ${connected?'connected':'disconnected'}">${connected?'✓ 연결됨':'미연결'}</span>
+        </div>
+
+        ${!connected?`
+        <div class="info-box">
+          <strong>처음 설정하는 방법</strong>
+          <ol>
+            <li><a href="https://www.dropbox.com/developers/apps" target="_blank">dropbox.com/developers/apps</a> 에서 앱 만들기</li>
+            <li>Scoped access → App folder → 앱 이름 입력 후 Create</li>
+            <li>Permissions 탭 → <code>files.content.read</code>, <code>files.content.write</code> 체크 후 Submit</li>
+            <li>Settings 탭 → Redirect URIs에 아래 주소 추가:<br/><code style="font-size:11px;word-break:break-all;">${getRedirectUri()}</code></li>
+            <li>App key를 아래에 붙여넣기</li>
+          </ol>
+        </div>
+        <div class="field-full" style="margin-bottom:10px;">
+          <label class="field-lbl">Dropbox App Key</label>
+          <input type="text" id="modal-appkey" placeholder="xxxxxxxxxxxx" value="${appKey}" oninput="localStorage.setItem('${DBX_KEY}',this.value)"/>
+        </div>
+        <button class="btn-primary" onclick="dbxConnect()">Dropbox로 연결하기</button>
+        `:`
+        <div class="info-box">저장 파일: <strong>Dropbox/앱폴더/distraction-tracker.json</strong><br/>기록을 추가·삭제할 때마다 자동으로 동기화돼요.</div>
+        <button class="btn-secondary" onclick="dbxLoad().then(closeModal)" style="margin-bottom:8px;">지금 동기화 (불러오기)</button>
+        <button class="btn-danger" onclick="if(confirm('Dropbox 연결을 해제할까요?'))dbxDisconnect()">연결 해제</button>
+        `}
+      </div>
+    </div>`;
+}
+
+function closeModal(){document.getElementById('modal-root').innerHTML='';}
+
+// ── Init ──
+if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
+handleOAuthCallback().then(()=>{
+  renderAll();
+  if(isDbxConnected()){setSyncDot('ok');dbxLoad();}else{setSyncDot('');}
+});
+</script>
+</body>
+</html>
