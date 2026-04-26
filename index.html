@@ -423,9 +423,8 @@ function genVerifier(){const a=new Uint8Array(32);crypto.getRandomValues(a);retu
 async function genChallenge(v){const d=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v));return b64url(d);}
 
 function getRedirectUri(){
-  const u=location.href.split('?')[0].split('#')[0];
-  // remove trailing slash for consistency
-  return u.endsWith('/')?u.slice(0,-1):u;
+  // Always produces: https://host/path/index.html — must match Dropbox exactly
+  return location.origin+location.pathname.replace(/\/?(?:index\.html)?$/,'/index.html');
 }
 
 async function dbxConnect(){
@@ -439,14 +438,23 @@ async function dbxConnect(){
     code_challenge:challenge,code_challenge_method:'S256',
     redirect_uri:getRedirectUri(),token_access_type:'offline'
   });
-  location.href='https://www.dropbox.com/oauth2/authorize?'+params;
+  const popup=window.open('https://www.dropbox.com/oauth2/authorize?'+params,'dbx-auth','width=520,height=680,left=200,top=100');
+  if(!popup){alert('팝업이 차단됐어요. 팝업 허용 후 다시 시도해주세요.');return;}
+  const timer=setInterval(async()=>{
+    if(popup.closed){clearInterval(timer);return;}
+    try{
+      const u=popup.location.href;
+      if(u.startsWith(getRedirectUri())){
+        const code=new URLSearchParams(popup.location.search).get('code');
+        clearInterval(timer);popup.close();
+        if(code)await exchangeCode(code);
+        else setSyncDot('err');
+      }
+    }catch(e){}
+  },400);
 }
 
-async function handleOAuthCallback(){
-  const params=new URLSearchParams(location.search);
-  const code=params.get('code');
-  if(!code)return;
-  history.replaceState({},'',location.pathname);
+async function exchangeCode(code){
   const appKey=localStorage.getItem(DBX_KEY);
   const verifier=localStorage.getItem(DBX_VERIFIER);
   if(!appKey||!verifier){setSyncDot('err');return;}
@@ -462,10 +470,20 @@ async function handleOAuthCallback(){
       localStorage.setItem(DBX_TOKEN,data.access_token);
       if(data.refresh_token)localStorage.setItem(DBX_REFRESH,data.refresh_token);
       localStorage.removeItem(DBX_VERIFIER);
+      closeModal();
       await dbxLoad();
       setSyncDot('ok');
     }else{setSyncDot('err');alert('Dropbox 연결 실패: '+JSON.stringify(data));}
   }catch(e){setSyncDot('err');}
+}
+
+async function handleOAuthCallback(){
+  const params=new URLSearchParams(location.search);
+  const code=params.get('code');
+  if(!code)return;
+  history.replaceState({},'',location.pathname);
+  if(window.opener&&!window.opener.closed){window.opener.focus();window.close();return;}
+  await exchangeCode(code);
 }
 
 async function dbxRefreshToken(){
@@ -561,12 +579,18 @@ function openSyncModal(){
             <li><a href="https://www.dropbox.com/developers/apps" target="_blank">dropbox.com/developers/apps</a> 에서 앱 만들기</li>
             <li>Scoped access → App folder → 앱 이름 입력 후 Create</li>
             <li>Permissions 탭 → <code>files.content.read</code>, <code>files.content.write</code> 체크 후 Submit</li>
-            <li>Settings 탭 → Redirect URIs에 아래 주소 추가:<br/><code style="font-size:11px;word-break:break-all;">${getRedirectUri()}</code></li>
-            <li>App key를 아래에 붙여넣기</li>
+            <li>Settings 탭 → Redirect URIs에 아래 주소를 <strong>정확히</strong> 추가</li>
           </ol>
         </div>
+        <div style="margin-bottom:12px;">
+          <label class="field-lbl">Redirect URI (Dropbox에 그대로 복사하세요)</label>
+          <div style="display:flex;gap:6px;">
+            <input type="text" id="redirect-uri-field" readonly value="${getRedirectUri()}" onclick="this.select()" style="flex:1;font-size:12px;color:var(--accent);background:var(--accent-lt);border-color:rgba(67,85,245,.3);cursor:pointer;"/>
+            <button class="btn-secondary" style="width:auto;padding:0 14px;font-size:12px;" onclick="navigator.clipboard.writeText('${getRedirectUri()}').then(()=>{this.textContent='✓';setTimeout(()=>this.textContent='복사',1500)})">복사</button>
+          </div>
+        </div>
         <div class="field-full" style="margin-bottom:10px;">
-          <label class="field-lbl">Dropbox App Key</label>
+          <label class="field-lbl">Dropbox App Key (Settings 탭에서 확인)</label>
           <input type="text" id="modal-appkey" placeholder="xxxxxxxxxxxx" value="${appKey}" oninput="localStorage.setItem('${DBX_KEY}',this.value)"/>
         </div>
         <button class="btn-primary" onclick="dbxConnect()">Dropbox로 연결하기</button>
